@@ -1,12 +1,11 @@
-import os
-import json
-import asyncio
+# api/webhook.py
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+import os, json, asyncio, aiohttp
 from dotenv import load_dotenv
-import aiohttp
 
-load_dotenv()  # Load .env variables
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -33,18 +32,18 @@ async def get_shizuka_reply(user_msg):
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=data) as resp:
             resp.raise_for_status()
-            resp_json = await resp.json()
-            return resp_json["choices"][0]["message"]["content"].strip()
+            result = await resp.json()
+            return result["choices"][0]["message"]["content"].strip()
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    await update.message.chat.send_action("typing")
-    reply = await get_shizuka_reply(update.message.text)
-    await update.message.reply_text(reply)
+    if update.message and update.message.text:
+        await update.message.chat.send_action("typing")
+        reply = await get_shizuka_reply(update.message.text)
+        await update.message.reply_text(reply)
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
+# ✅ Vercel expects this format
 async def handler(request):
     body = await request.json()
     update = Update.de_json(body, app.bot)
