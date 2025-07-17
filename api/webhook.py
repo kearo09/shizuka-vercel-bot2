@@ -2,21 +2,30 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import os, json, aiohttp
 
+# Fetching env variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Debug logs for Vercel
+print("BOT_TOKEN:", "✅" if BOT_TOKEN else "❌ MISSING")
+print("GROQ_API_KEY:", "✅" if GROQ_API_KEY else "❌ MISSING")
+
+# Build the bot app
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# /start command handler
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🌸 Shizuka is online!")
 
 app.add_handler(CommandHandler("start", start))
 
-# Function to get reply from Groq API
+# Groq reply function
 async def get_shizuka_reply(user_msg):
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     data = {
         "model": "llama3-8b-8192",
         "messages": [
@@ -32,7 +41,7 @@ async def get_shizuka_reply(user_msg):
             result = await resp.json()
             return result["choices"][0]["message"]["content"].strip()
 
-# Message handler for text messages
+# Message handler
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text:
         await update.message.chat.send_action("typing")
@@ -41,7 +50,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
-# Vercel async handler
+# Webhook handler for Vercel
 async def handler(request):
     body = await request.json()
     update = Update.de_json(body, app.bot)
