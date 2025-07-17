@@ -1,33 +1,26 @@
-from fastapi import FastAPI, Request
+# api/webhook.py
+
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-import os, json, aiohttp, asyncio
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+import os, json, aiohttp
+from fastapi import FastAPI, Request
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-print("BOT_TOKEN:", "✅" if BOT_TOKEN else "❌ MISSING")
-print("GROQ_API_KEY:", "✅" if GROQ_API_KEY else "❌ MISSING")
+app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Create FastAPI app
-app = FastAPI()
-
-# Create Telegram bot application
-bot_app = Application.builder().token(BOT_TOKEN).build()
-
-# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🌸 Shizuka is online!")
 
-bot_app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("start", start))
 
-# Groq reply
 async def get_shizuka_reply(user_msg):
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     data = {
         "model": "llama3-8b-8192",
         "messages": [
@@ -39,25 +32,23 @@ async def get_shizuka_reply(user_msg):
     }
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=data) as resp:
-            resp.raise_for_status()
             result = await resp.json()
             return result["choices"][0]["message"]["content"].strip()
 
-# Message handler
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text:
         await update.message.chat.send_action("typing")
         reply = await get_shizuka_reply(update.message.text)
         await update.message.reply_text(reply)
 
-bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
-# FastAPI POST endpoint for Telegram webhook
-@app.post("/api/webhook")
-async def telegram_webhook(request: Request):
-    body = await request.json()
-    update = Update.de_json(body, bot_app.bot)
-    await bot_app.process_update(update)
+# FastAPI app
+fastapi_app = FastAPI()
+
+@fastapi_app.post("/")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, app.bot)
+    await app.process_update(update)
     return {"status": "ok"}
-
-
